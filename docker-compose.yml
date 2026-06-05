@@ -1,0 +1,115 @@
+version: "3.9"
+
+services:
+
+  # ------------------------
+  # AIRFLOW METADATA DB
+  # ------------------------
+  airflow_postgres:
+    image: postgres:16
+    container_name: airflow_db
+
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+
+    ports:
+      - "5433:5432"
+
+
+  # ------------------------
+  # STOCK DATABASE (DEINE DATEN)
+  # ------------------------
+  stock_postgres:
+    image: postgres:16
+    container_name: stock_postgres
+
+    environment:
+      POSTGRES_USER: stock_user
+      POSTGRES_PASSWORD: stock_password
+      POSTGRES_DB: stocks
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+
+  # ------------------------
+  # PGADMIN (für STOCK DB)
+  # ------------------------
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: stock_pgadmin
+
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+
+    ports:
+      - "5050:80"
+
+    depends_on:
+      - stock_postgres
+
+
+  # ------------------------
+  # AIRFLOW INIT
+  # ------------------------
+  airflow-init:
+    image: apache/airflow:2.9.3
+
+    depends_on:
+      - airflow_postgres
+
+    environment:
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow_postgres:5432/airflow
+
+    entrypoint: >
+      bash -c "
+      airflow db migrate &&
+      airflow users create --username admin --password admin --firstname a --lastname a --role Admin --email admin@test.com
+      "
+
+
+  # ------------------------
+  # AIRFLOW WEB
+  # ------------------------
+  airflow:
+    image: apache/airflow:2.9.3
+
+    depends_on:
+      - airflow_postgres
+      - airflow-init
+
+    environment:
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow_postgres:5432/airflow
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+
+    ports:
+      - "8080:8080"
+
+    command: webserver
+
+
+  # ------------------------
+  # AIRFLOW SCHEDULER
+  # ------------------------
+  airflow-scheduler:
+    image: apache/airflow:2.9.3
+
+    depends_on:
+      - airflow_postgres
+      - airflow-init
+
+    environment:
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow_postgres:5432/airflow
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+
+    command: scheduler
+
+
+volumes:
+  postgres_data:

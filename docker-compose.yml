@@ -63,15 +63,24 @@ services:
 
     depends_on:
       - airflow_postgres
+    
+    env_file:
+      - .env
 
     environment:
       AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow_postgres:5432/airflow
+      AIRFLOW__WEBSERVER__SECRET_KEY: "airflow-secret-key-2026-dev"
+      PYTHONPATH: /opt/airflow
+      DB_HOST: stock_postgres
 
     entrypoint: >
       bash -c "
       airflow db migrate &&
       airflow users create --username admin --password admin --firstname a --lastname a --role Admin --email admin@test.com
       "
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./src:/opt/airflow/src
 
 
   # ------------------------
@@ -83,15 +92,25 @@ services:
     depends_on:
       - airflow_postgres
       - airflow-init
+    
+    env_file:
+      - .env
 
     environment:
       AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow_postgres:5432/airflow
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__WEBSERVER__SECRET_KEY: "airflow-secret-key-2026-dev"
+      PYTHONPATH: /opt/airflow
+      DB_HOST: stock_postgres
 
     ports:
       - "8080:8080"
 
     command: webserver
+
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./src:/opt/airflow/src
 
 
   # ------------------------
@@ -103,12 +122,21 @@ services:
     depends_on:
       - airflow_postgres
       - airflow-init
+    
+    env_file:
+      - .env
 
     environment:
       AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow_postgres:5432/airflow
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__WEBSERVER__SECRET_KEY: "airflow-secret-key-2026-dev"
+      PYTHONPATH: /opt/airflow
+      DB_HOST: stock_postgres
 
     command: scheduler
+    volumes:
+    - ./dags:/opt/airflow/dags
+    - ./src:/opt/airflow/src
 
 
 volumes:

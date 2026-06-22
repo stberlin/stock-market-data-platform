@@ -40,9 +40,9 @@ def run_etl(symbol):
     df["volume"] = pd.to_numeric(df["volume"], errors="coerce").astype("int64")
 
     now = df["timestamp"].max()
-    cutoff = now - pd.Timedelta(minutes=50)
+    cutoff = now - pd.Timedelta(minutes=60)
 
-    df_filtered = df[df["timestamp"] >= cutoff]
+    df_filtered = df[df["timestamp"] >= cutoff].copy()
 
 
     existing_timestamp = get_stock_prices_sql()
@@ -55,7 +55,7 @@ def run_etl(symbol):
         #df_final = df_filtered[~df_filtered["timestamp"].isin(existing_timestamp_set)]
 
         existing_keys = set(zip(existing_timestamp["symbol"], existing_timestamp["timestamp"]))
-        df_final = df_filtered[~df_filtered.apply(lambda row: (row["symbol"], row["timestamp"]) in existing_keys, axis=1)]
+        df_final = df_filtered[~df_filtered.apply(lambda row: (row["symbol"], row["timestamp"]) in existing_keys, axis=1)].copy()
 
     else:
         df_final = df_filtered.copy()

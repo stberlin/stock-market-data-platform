@@ -3,14 +3,15 @@ from airflow.operators.python import PythonOperator
 from datetime import datetime
 
 from src.etl.load_stock_data import main_stock
-from src.etl.alert_engine import main_alert
+from src.etl.alert_engine_v1 import main_alert
+import pendulum
 
-
+ny_tz = pendulum.timezone("America/New_York")
 
 with DAG(
     dag_id="stock_pipeline_ingest_then_alert",
-    start_date=datetime(2026, 1, 1),
-    schedule="*/30 * * * *",
+    start_date=pendulum.datetime(2026, 1, 1, tz=ny_tz),
+    schedule="*/30 9-16 * * 1-5",
     catchup=False,
     tags=["stocks", "pipeline"]
 ) as dag:

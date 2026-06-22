@@ -16,3 +16,4 @@ End-to-end data engineering project.
 - Store data in PostgreSQL
 - Automated ETL pipelines
 - Dashboarding
+

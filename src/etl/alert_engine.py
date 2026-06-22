@@ -42,7 +42,7 @@ def check_price_drop(drop_threshold=5, lookback_minutes=30):
     )
 
 def main_alert():
-    check_price_drop(drop_threshold=-3, lookback_minutes=30)
+    check_price_drop(drop_threshold=-5, lookback_minutes=30)
 
 if __name__ == "__main__":
     main_alert()

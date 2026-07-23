@@ -102,9 +102,9 @@ stock-market-data-platform/
 |---|---|
 | `dags/` | Apache Airflow DAG definitions for scheduling and orchestrating stock data pipelines |
 | `stock_pipeline.py` | Main production pipeline combining data ingestion, processing, and storage |
-| `stock_pipeline_ingestion_only.py` | DAG responsible for retrieving and loading stock market data |
-| `stock_pipeline_dag_alerts.py` | DAG including automated alert generation |
-| `stock_pipeline_v1.py` | Previous pipeline version used for development and testing |
+| `stock_pipeline_ingestion_only.py` | testing - DAG responsible for retrieving and loading stock market data |
+| `stock_pipeline_dag_alerts.py` | testing - DAG including automated alert generation |
+| `stock_pipeline_v1.py` | testing - Previous pipeline version used for development and testing |
 | `src/api/` | API integration layer |
 | `stock_api.py` | Client for retrieving stock market data from external APIs |
 | `src/database/` | Database management and connection handling |
@@ -112,8 +112,8 @@ stock-market-data-platform/
 | `init_db.py` | Database initialization and setup |
 | `src/etl/` | Data processing and business logic |
 | `load_stock_data.py` | Loads processed stock data into the database |
-| `alert_engine.py` | Generates alerts based on stock market conditions |
-| `alert_engine_v1.py` | Previous version of the alert logic |
+| `alert_engine.py` | testing - Generates alerts based on stock market conditions |
+| `alert_engine_v1.py` | Main alert logic |
 | `test.py` | Testing scripts |
 | `config.py` | Central application configuration |
 | `docker-compose.yml` | Container configuration for running the application stack |

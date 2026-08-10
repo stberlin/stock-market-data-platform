@@ -1,7 +1,7 @@
 from sqlalchemy.dialects.postgresql import insert
 
 from src.database.connection import engine
-from src.database.models import stock_prices
+from src.database.models import stock_alerts, stock_prices
 
 
 def insert_stock_data(df):
@@ -18,5 +18,20 @@ def insert_stock_data(df):
 
     with engine.begin() as connection:
         result = connection.execute(statement)
+
+    return result.rowcount
+
+
+def insert_alert_data(df):
+    records = df.to_dict(orient="records")
+
+    if not records:
+        return 0
+
+    with engine.begin() as connection:
+        result = connection.execute(
+            stock_alerts.insert(),
+            records,
+        )
 
     return result.rowcount

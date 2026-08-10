@@ -4,6 +4,10 @@ from datetime import datetime
 import requests
 import sys
 import os
+from src.notifications.telegram import send_telegram_message
+from src.database.repository import insert_alert_data
+import logging
+logger = logging.getLogger(__name__)
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -90,10 +94,10 @@ WHERE p.change_pct <= {drop_threshold};
     df = pd.read_sql(query, engine)
 
     if df.empty:
-        print("No alerts")
-        sys.exit(0)
+        logger.info("No alerts found")
+        return None
 
-    print("ALERTS FOUND:")
+    logger.info("%s alerts found", len(df))
     return df
 
 
@@ -309,7 +313,7 @@ def signal_calculator(alert_df):
     alert_df["rebound_score"] = None
     # testing
     #alert_df['change_pct'] = alert_df['change_pct'] * 10
-    
+
     for idx, row in alert_df.iterrows():
 
         (
@@ -320,7 +324,7 @@ def signal_calculator(alert_df):
             volume_ratio,
             context_ratio
 
-            
+
         ) = calculate_signal(
             row["change_pct"],
             row["volume_now"],
@@ -502,40 +506,28 @@ def push_to_db(final_alert_df):
     )
 
 
-def send_telegram_message(message, bot_token, chat_id):
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-
-    payload = {
-        "chat_id": chat_id,
-        "text": message,
-        "parse_mode": "HTML"   # optional (für später Formatierung)
-    }
-
-    response = requests.post(url, data=payload)
-
-    if response.status_code != 200:
-        print("Telegram Error:", response.text)
-
-    return response.json()
-
-    
-
 def main_alert():
+    logger.info("Starting alert pipeline")
     drop_threshold=-3
     lookback_minutes=30
     alert_df = check_price_drop(drop_threshold=drop_threshold, lookback_minutes=lookback_minutes)
+    logger.info("Running alert detection")
+    if alert_df is None:
+        return
     alert_signal_df = signal_calculator(alert_df)
     #alert_score_df = score_calculator(alert_df)
-    
+
     final_alert_df = alert_signal_processor(alert_signal_df, drop_threshold, lookback_minutes)
-    push_to_db(final_alert_df)
+    #push_to_db(final_alert_df)
+    inserted_rows = insert_alert_data(final_alert_df)
+    logger.info("%s alert rows inserted", inserted_rows)
     rebound_strong, rebound_watchlist, sell_strong = run_alert_system(final_alert_df)
+    logger.info("Sending Telegram notification")
     message = build_message(rebound_strong, rebound_watchlist, sell_strong)
-    send_telegram_message(message=message, bot_token=API_KEY, chat_id=CHAT_ID)
-    
+    send_telegram_message(message=message, bot_token=API_KEY, chat_id=CHAT_ID,)
+    logger.info("Alert pipeline finished")
 
 
 
 if __name__ == "__main__":
     main_alert()
-    

@@ -1,19 +1,11 @@
 from src.database.connection import engine
+from src.database.models import metadata
 
-create_table_sql = """
-CREATE TABLE IF NOT EXISTS stock_prices (
-    id SERIAL PRIMARY KEY,
-    symbol VARCHAR(10),
-    timestamp TIMESTAMP,
-    open NUMERIC,
-    high NUMERIC,
-    low NUMERIC,
-    close NUMERIC,
-    volume BIGINT
-);
-"""
 
-with engine.connect() as conn:
-    conn.execute(create_table_sql)
+def init_db():
+    metadata.create_all(engine)
+    print("Database initialized.")
 
-print("Table created")
+
+if __name__ == "__main__":
+    init_db()

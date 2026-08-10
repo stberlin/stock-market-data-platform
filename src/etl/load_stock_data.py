@@ -1,26 +1,16 @@
 import time
 from datetime import datetime
-
 import pandas as pd
 
 from src.api.stock_api import get_stock_data_time_series
 from src.config import STOCK_SYMBOLS, SYMBOL_REQUEST_DELAY_SECONDS
 from src.database.connection import engine
 
-def get_stock_prices_sql():
-    query = """
-    SELECT timestamp, symbol
-    FROM stock_prices;
-    """
+from sqlalchemy.dialects.postgresql import insert
+from src.database.repository import insert_stock_data
+from src.logging_config import get_logger
 
-    df = pd.read_sql(query, engine)
-
-    if df.empty:
-        print("No comparison data to return")
-        return None
-
-    print("Comparison data available")
-    return df
+logger = get_logger(__name__)
 
 
 def transform_stock_data(data, symbol):
@@ -54,7 +44,7 @@ def run_etl(symbol):
     data = get_stock_data_time_series(symbol)
 
     if not data:
-        print(f"No API data returned for {symbol}")
+        logger.info("No new data to update for %s", symbol)
         return
 
     df = transform_stock_data(data, symbol)
@@ -64,50 +54,23 @@ def run_etl(symbol):
 
     df_filtered = df[df["timestamp"] >= cutoff].copy()
 
+    inserted_rows = insert_stock_data(df_filtered)
 
-    existing_timestamp = get_stock_prices_sql()
-
-    if existing_timestamp is not None:
-        # filter out existing values
-        df_filtered["timestamp"] = pd.to_datetime(df_filtered["timestamp"])
-
-        #existing_keys = set(zip(existing_timestamp["symbol"], existing_timestamp["timestamp"]))
-        #df_final = df_filtered[~df_filtered.apply(lambda row: (row["symbol"], row["timestamp"]) in existing_keys, axis=1)].copy()
-        df_final = df_filtered.merge(
-            existing_timestamp,
-            on=["symbol", "timestamp"],
-            how="left",
-            indicator=True,
-        )
-
-        df_final = (
-            df_final[df_final["_merge"] == "left_only"]
-            .drop(columns="_merge")
-        )
+    if inserted_rows > 0:
+        logger.info("%s rows inserted for %s", inserted_rows, symbol)
     else:
-        df_final = df_filtered.copy()
+        logger.info("No new data to update for %s", symbol)
 
-    if not df_final.empty:
-        df_final.to_sql(
-            "stock_prices",
-            engine,
-            if_exists="append",
-            index=False
-        )
-        print(f"{len(df_final)} rows inserted for {symbol}")
-    else:
-        print(f"No data to update for {symbol}")
 
 def main_stock():
-    #stock_list = ['QNC', 'AAPL', 'TSLA', 'GOOGL', 'IREN', 'NVDA', 'MU', 'PL', 'QBTS', 'RGTI', 'NTLA', 'CRWV', 'NBIS']
     total = len(STOCK_SYMBOLS)
     for i, asset in enumerate(STOCK_SYMBOLS, start=1):
-        print(f"[{i}/{total}] Processing {asset}...")
+        logger.info("[%s/%s] Processing %s", i, total, asset)
         run_etl(asset)
         if i < total:
             time.sleep(SYMBOL_REQUEST_DELAY_SECONDS)
 
-    print("Finished processing all assets.")
+    logger.info("Finished processing all assets.")
 
 
 if __name__ == "__main__":

@@ -7,33 +7,42 @@ The project fetches financial market data from external APIs, processes the data
 ## Architecture Overview
 
 ```
-Twelve Data API
-        |
-        ↓
-Python Data Ingestion Pipeline
-        |
-        ↓
-PostgreSQL Database
-        |
-        ↓
-Apache Airflow Scheduler
-        |
-        ↓
-Data Analysis & Processing
-        |
-        ↓
-Telegram Notifications
+                Twelve Data API
+                       │
+                       ▼
+                stock_api.py
+                       │
+                       ▼
+          transform_stock_data()
+                       │
+                       ▼
+          repository.py (SQLAlchemy)
+                       │
+                       ▼
+      PostgreSQL (ON CONFLICT DO NOTHING)
+                       │
+             ┌─────────┴─────────┐
+             ▼                   ▼
+      Alert Engine          Airflow DAGs
+             │
+             ▼
+      Telegram Notifications
 ```
 
 ## Features
 
-* Automated retrieval of stock market data via REST API
-* ETL pipeline for extracting, transforming, and loading financial data
-* Containerized environment using Docker
-* PostgreSQL database for structured data storage
-* Workflow orchestration with Apache Airflow
-* Automated stock analysis
-* Telegram notifications based on analysis results
+- Automated ETL pipeline for historical stock market data
+- Modular architecture (API, ETL, Repository, Database)
+- PostgreSQL storage with idempotent inserts using `ON CONFLICT DO NOTHING`
+- SQLAlchemy repository layer
+- Apache Airflow workflow orchestration
+- Configurable stock watchlist
+- Automatic retry handling for API rate limits
+- Timezone conversion (New York ↔ Berlin)
+- Telegram alert engine
+- Structured logging
+- Unit and integration tests using pytest
+- Docker-based development environment
 
 ## Technology Stack
 
@@ -61,7 +70,7 @@ Telegram Notifications
 
 ## Project Structure
 
-```
+```text
 stock-market-data-platform/
 
 ├── dags/
@@ -69,6 +78,11 @@ stock-market-data-platform/
 │   ├── stock_pipeline_dag_alerts.py
 │   ├── stock_pipeline_ingestion_only.py
 │   └── stock_pipeline_v1.py
+│
+├── scripts/
+│   ├── debug_alerts.py
+│   ├── debug_api.py
+│   └── debug_db.py
 │
 ├── src/
 │   │
@@ -79,18 +93,27 @@ stock-market-data-platform/
 │   ├── database/
 │   │   ├── __init__.py
 │   │   ├── connection.py
-│   │   └── init_db.py
+│   │   ├── init_db.py
+│   │   ├── models.py
+│   │   └── repository.py
 │   │
 │   ├── etl/
 │   │   ├── __init__.py
-│   │   ├── load_stock_data.py
 │   │   ├── alert_engine.py
 │   │   ├── alert_engine_v1.py
-│   │   └── test.py
+│   │   └── load_stock_data.py
 │   │
+│   ├── logging_config.py
 │   └── config.py
 │
+├── tests/
+│   ├── test_repository.py
+│   └── test_transform_stock_data.py
+│
+├── .dockerignore
+├── .env.example
 ├── .gitignore
+├── pytest.ini
 ├── README.md
 ├── docker-compose.yml
 └── requirements.txt
@@ -100,61 +123,95 @@ stock-market-data-platform/
 
 | Directory / File | Description |
 |---|---|
-| `dags/` | Apache Airflow DAG definitions for scheduling and orchestrating stock data pipelines |
-| `stock_pipeline.py` | Main production pipeline combining data ingestion, processing, and storage |
-| `stock_pipeline_ingestion_only.py` | testing - DAG responsible for retrieving and loading stock market data |
-| `stock_pipeline_dag_alerts.py` | testing - DAG including automated alert generation |
-| `stock_pipeline_v1.py` | testing - Previous pipeline version used for development and testing |
+| `dags/` | Apache Airflow DAG definitions for scheduling and orchestrating ETL workflows |
+| `stock_pipeline.py` | Main production pipeline for data ingestion, transformation, and storage |
+| `stock_pipeline_ingestion_only.py` | Development DAG for testing the data ingestion process |
+| `stock_pipeline_dag_alerts.py` | Development DAG for testing the alert generation workflow |
+| `stock_pipeline_v1.py` | Legacy pipeline version retained for reference during development |
+| `scripts/` | Standalone debugging and development scripts |
+| `debug_api.py` | Debug script for testing API connectivity and responses |
+| `debug_db.py` | Debug script for testing database connectivity and queries |
+| `debug_alerts.py` | Debug script for testing the alert engine |
 | `src/api/` | API integration layer |
-| `stock_api.py` | Client for retrieving stock market data from external APIs |
-| `src/database/` | Database management and connection handling |
-| `connection.py` | PostgreSQL database connection configuration |
-| `init_db.py` | Database initialization and setup |
-| `src/etl/` | Data processing and business logic |
-| `load_stock_data.py` | Loads processed stock data into the database |
-| `alert_engine.py` | testing - Generates alerts based on stock market conditions |
-| `alert_engine_v1.py` | Main alert logic |
-| `test.py` | Testing scripts |
-| `config.py` | Central application configuration |
-| `docker-compose.yml` | Container configuration for running the application stack |
-| `requirements.txt` | Python dependencies |
+| `stock_api.py` | Retrieves stock market data from the Twelve Data API with retry and rate-limit handling |
+| `src/database/` | Database models, connection management, and persistence layer |
+| `connection.py` | SQLAlchemy database engine configuration |
+| `init_db.py` | Initializes the database schema |
+| `models.py` | SQLAlchemy table definitions and database schema |
+| `repository.py` | Repository layer responsible for database operations and idempotent inserts |
+| `src/etl/` | ETL processing and business logic |
+| `load_stock_data.py` | Extracts, transforms, and loads stock market data into PostgreSQL |
+| `alert_engine.py` | Main alert engine for detecting significant market movements |
+| `alert_engine_v1.py` | Legacy alert engine implementation retained for reference |
+| `logging_config.py` | Central logging configuration used across the application |
+| `config.py` | Central application configuration and constants |
+| `tests/` | Unit and integration tests |
+| `test_transform_stock_data.py` | Unit tests for data transformation and timezone conversion |
+| `test_repository.py` | Integration tests for PostgreSQL repository and duplicate handling |
+| `.env.example` | Example environment variables configuration |
+| `pytest.ini` | Pytest configuration |
+| `docker-compose.yml` | Docker Compose configuration for the complete application stack |
+| `requirements.txt` | Python project dependencies |
 
 ## Data Pipeline
 
-### 1. Data Extraction
+Extract
+↓
 
-Stock market data is retrieved from the Twelve Data API.
+Transform
 
-The pipeline collects relevant market information and prepares the raw API responses for further processing.
+↓
 
-### 2. Data Storage
+Load (Repository Layer)
 
-Processed data is stored in PostgreSQL.
+↓
 
-The database provides a structured storage layer for historical market information and enables efficient querying for analysis.
+PostgreSQL
 
-### 3. Workflow Automation
+↓
 
-Apache Airflow manages the execution schedule of the pipeline.
+Alert Engine
 
-The workflow automatically triggers data extraction, transformation, storage, and analysis tasks.
+↓
 
-### 4. Data Analysis
-
-The stored market data is analyzed using Python.
-
-Examples:
-
-* price development analysis
-* performance calculations
-* indicator calculations
-* identification of relevant market movements
+Telegram
 
 ### 5. Notifications
 
 Analysis results are automatically delivered through Telegram notifications.
 
 This allows users to receive relevant insights without manually querying the database.
+
+### 6. Testing
+
+The project includes both unit and integration tests to ensure reliable data processing and database operations.
+
+Run all tests:
+
+```bash
+pytest -v
+```
+
+Current test coverage includes:
+
+- Data transformation from API responses
+- Validation of invalid numeric input
+- Timezone conversion (New York ↔ Berlin)
+- PostgreSQL duplicate protection using `ON CONFLICT DO NOTHING`
+
+The integration tests verify that duplicate records are handled correctly by the database, ensuring idempotent data ingestion.
+
+### 7. Logging
+
+The project uses Python's built-in `logging` module instead of `print()` statements to provide structured and configurable log output.
+
+Current log levels include:
+
+- `INFO` – General pipeline execution and processing status
+- `WARNING` – Recoverable issues such as API rate limits
+- `ERROR` – API failures and unexpected processing errors
+
+Structured logging simplifies debugging, integrates seamlessly with Apache Airflow logs, and provides a solid foundation for production monitoring.
 
 ## Setup
 
@@ -209,12 +266,16 @@ docker-compose up -d
 
 Possible extensions:
 
-* Add a dashboard using Streamlit
-* Implement additional market indicators
-* Add machine learning based predictions
-* Improve data quality monitoring
-* Add automated testing
-* Deploy the platform to cloud infrastructure
+* Implement CI/CD using GitHub Actions
+* Add database migrations with Alembic
+* Introduce data quality validation and monitoring
+* Add application metrics and health checks
+* Build an interactive dashboard using Streamlit
+* Implement additional technical indicators
+* Add cloud deployment (AWS, Azure, or GCP)
+* Support multiple financial data providers
+* Add real-time data streaming capabilities
+* Integrate machine learning based anomaly detection
 
 ## Purpose
 

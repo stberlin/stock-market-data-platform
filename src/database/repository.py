@@ -31,7 +31,7 @@ def insert_alert_data(df):
     with engine.begin() as connection:
         result = connection.execute(
             stock_alerts.insert(),
-            records,
+            records
         )
 
     return result.rowcount

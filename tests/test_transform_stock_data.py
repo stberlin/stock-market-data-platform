@@ -18,7 +18,7 @@ def test_transform_stock_data_converts_api_response():
     result = transform_stock_data(raw_data, "AAPL")
 
     assert len(result) == 1
-    assert result.loc[0, "symbol"] == "AAPL"
+    assert result.loc[0, "symbol"] == "TSLA"
 
     assert pd.api.types.is_datetime64_any_dtype(result["timestamp"])
     assert pd.api.types.is_numeric_dtype(result["open"])

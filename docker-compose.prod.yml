@@ -12,9 +12,6 @@ services:
       POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD}
       POSTGRES_DB: ${AIRFLOW_DB_NAME}
 
-    ports:
-      - "5433:5432"
-
     volumes:
       - airflow_postgres_data:/var/lib/postgresql/data
 
@@ -29,9 +26,6 @@ services:
       POSTGRES_USER: ${STOCK_DB_USER}
       POSTGRES_PASSWORD: ${STOCK_DB_PASSWORD}
       POSTGRES_DB: ${STOCK_DB_NAME}
-
-    ports:
-      - "5432:5432"
 
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -48,9 +42,6 @@ services:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
 
-    ports:
-      - "5050:80"
-      
     depends_on:
       - stock_postgres
 

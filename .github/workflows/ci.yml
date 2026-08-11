@@ -31,11 +31,11 @@ jobs:
           --health-retries 5
 
     env:
-      DB_USER: stock_user
-      DB_PASSWORD: stock_password
-      DB_HOST: localhost
-      DB_PORT: 5432
-      DB_NAME: stocks
+      STOCK_DB_USER: stock_user
+      STOCK_DB_PASSWORD: stock_password
+      STOCK_DB_HOST: localhost
+      STOCK_DB_PORT: 5432
+      STOCK_DB_NAME: stocks
 
     steps:
       - name: Checkout repository

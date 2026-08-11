@@ -4,8 +4,13 @@ from datetime import datetime
 import requests
 import sys
 import os
+from src.notifications.telegram import send_telegram_message
+from src.database.repository import insert_alert_data
+import logging
+logger = logging.getLogger(__name__)
 from dotenv import load_dotenv
 load_dotenv()
+from src.config import (ALERT_DROP_THRESHOLD, ALERT_LOOKBACK_MINUTES, COMPANY_NAMES,)
 
 API_KEY = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -90,10 +95,10 @@ WHERE p.change_pct <= {drop_threshold};
     df = pd.read_sql(query, engine)
 
     if df.empty:
-        print("No alerts")
-        sys.exit(0)
+        logger.info("No alerts found")
+        return None
 
-    print("ALERTS FOUND:")
+    logger.info("%s alerts found", len(df))
     return df
 
 
@@ -197,7 +202,11 @@ def calculate_signal(change_pct, volume_now, avg_volume_today, avg_volume_7d):
     #     and volume_now >= avg_volume_today * 1.5
     # ):
     #     volume_confirmation = True
-    volume_ratio = volume_now / avg_volume_today
+    if avg_volume_today > 0:
+        volume_ratio = volume_now / avg_volume_today
+    else:
+        volume_ratio = 0
+
     if volume_ratio >= 3:
         volume_confirmation = "EXTREME"
 
@@ -225,6 +234,7 @@ def calculate_signal(change_pct, volume_now, avg_volume_today, avg_volume_7d):
         volume_score = min(volume_ratio * 50, 100)
     else:
         volume_score = 0
+        volume_ratio = 0
 
     # ------------------------
     # Historical Context Component
@@ -235,6 +245,7 @@ def calculate_signal(change_pct, volume_now, avg_volume_today, avg_volume_7d):
         context_score = min(context_ratio * 50, 100)
     else:
         context_score = 0
+        context_ratio = 0
 
     # ------------------------
     # Final Strength
@@ -309,7 +320,7 @@ def signal_calculator(alert_df):
     alert_df["rebound_score"] = None
     # testing
     #alert_df['change_pct'] = alert_df['change_pct'] * 10
-    
+
     for idx, row in alert_df.iterrows():
 
         (
@@ -320,7 +331,7 @@ def signal_calculator(alert_df):
             volume_ratio,
             context_ratio
 
-            
+
         ) = calculate_signal(
             row["change_pct"],
             row["volume_now"],
@@ -340,22 +351,7 @@ def signal_calculator(alert_df):
 
 
 def add_company_name_column(df):
-    ticker_to_name = {
-        "QNC": "Quantum eM.",
-        "AAPL": "Apple",
-        "TSLA": "Tesla",
-        "GOOGL": "Alphabet",
-        "IREN": "IREN",
-        "NVDA": "NVIDIA",
-        "MU": "Micron",
-        "PL": "Planet Labs",
-        "QBTS": "D-Wave",
-        "RGTI": "Rigetti",
-        "NTLA": "Intellia",
-        "CRWV": "CoreWeave",
-        "NBIS": "Nebius"
-    }
-    df["company_name"] = df["symbol"].map(ticker_to_name)
+    df["company_name"] = df["symbol"].map(COMPANY_NAMES)
     return df
 
 
@@ -365,13 +361,6 @@ def alert_signal_processor(alert_signal_df, drop_threshold, lookback_minutes):
     alert_signal_df_mapped = add_company_name_column(alert_signal_df)
 
     return alert_signal_df_mapped
-    # alert_db_df_list = []
-    # for _, row in alert_signal_df.iterrows():
-
-    #     label = classify_row(row)
-    #     if label == "STRONG_REBOUND" or "WATCHLIST_REBOUND" or "HIGH_SELL":
-    #         alert_db_df_list.append(row)
-
 
 
 def classify_row(row):
@@ -483,13 +472,6 @@ def build_message(rebound_strong, rebound_watchlist, sell_strong):
 
         message += "\n"
 
-    # # ⚪ UNCLEAR SECTION (optional)
-    # if unclear:
-    #     message += "⚪ NO CLEAR SETUP\n"
-
-    #     for u in unclear[:5]:
-    #         message += f"{u['symbol']} | {u['change']:.2f}%\n"
-
     return message
 
 
@@ -502,40 +484,29 @@ def push_to_db(final_alert_df):
     )
 
 
-def send_telegram_message(message, bot_token, chat_id):
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-
-    payload = {
-        "chat_id": chat_id,
-        "text": message,
-        "parse_mode": "HTML"   # optional (für später Formatierung)
-    }
-
-    response = requests.post(url, data=payload)
-
-    if response.status_code != 200:
-        print("Telegram Error:", response.text)
-
-    return response.json()
-
-    
-
 def main_alert():
-    drop_threshold=-3
-    lookback_minutes=30
-    alert_df = check_price_drop(drop_threshold=drop_threshold, lookback_minutes=lookback_minutes)
-    alert_signal_df = signal_calculator(alert_df)
-    #alert_score_df = score_calculator(alert_df)
-    
-    final_alert_df = alert_signal_processor(alert_signal_df, drop_threshold, lookback_minutes)
-    push_to_db(final_alert_df)
-    rebound_strong, rebound_watchlist, sell_strong = run_alert_system(final_alert_df)
-    message = build_message(rebound_strong, rebound_watchlist, sell_strong)
-    send_telegram_message(message=message, bot_token=API_KEY, chat_id=CHAT_ID)
-    
+    logger.info("Starting alert pipeline")
 
+    drop_threshold = ALERT_DROP_THRESHOLD
+    lookback_minutes = ALERT_LOOKBACK_MINUTES
+
+    alert_df = check_price_drop(drop_threshold=drop_threshold, lookback_minutes=lookback_minutes)
+    logger.info("Running alert detection")
+    if alert_df is None:
+        return
+
+    alert_signal_df = signal_calculator(alert_df)
+    final_alert_df = alert_signal_processor(alert_signal_df, drop_threshold, lookback_minutes)
+
+    inserted_rows = insert_alert_data(final_alert_df)
+    logger.info("%s alert rows inserted", inserted_rows)
+
+    rebound_strong, rebound_watchlist, sell_strong = run_alert_system(final_alert_df)
+    logger.info("Sending Telegram notification")
+    message = build_message(rebound_strong, rebound_watchlist, sell_strong)
+    send_telegram_message(message=message, bot_token=API_KEY, chat_id=CHAT_ID,)
+    logger.info("Alert pipeline finished")
 
 
 if __name__ == "__main__":
     main_alert()
-    

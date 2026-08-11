@@ -13,6 +13,11 @@ from src.config import (
 
 load_dotenv()
 
+from src.logging_config import get_logger
+
+logger = get_logger(__name__)
+
+
 API_KEY = os.getenv("TWELVE_API_KEY")
 
 def get_stock_data_time_series(
@@ -37,9 +42,10 @@ def get_stock_data_time_series(
             )
 
             if response.status_code == 429:
-                print(
-                    f"[RATE LIMIT] Hit for {symbol}, "
-                    f"sleeping {RATE_LIMIT_SLEEP_SECONDS}s..."
+                logger.warning(
+                    "Rate limit hit for %s, sleeping %ss",
+                    symbol,
+                    RATE_LIMIT_SLEEP_SECONDS,
                 )
                 time.sleep(RATE_LIMIT_SLEEP_SECONDS)
                 continue
@@ -51,23 +57,32 @@ def get_stock_data_time_series(
                 return data["values"]
 
             if data.get("code") == 429:
-                print(
-                    f"[RATE LIMIT] Hit for {symbol}, "
-                    f"sleeping {RATE_LIMIT_SLEEP_SECONDS}s..."
+                # print(
+                #     f"[RATE LIMIT] Hit for {symbol}, "
+                #     f"sleeping {RATE_LIMIT_SLEEP_SECONDS}s..."
+                # )
+                logger.warning(
+                    "Rate limit hit for %s, sleeping %ss",
+                    symbol,
+                    RATE_LIMIT_SLEEP_SECONDS,
                 )
                 time.sleep(RATE_LIMIT_SLEEP_SECONDS)
                 continue
 
-            print(f"[API ERROR] {symbol}: {data}")
+            #print(f"[API ERROR] {symbol}: {data}")
+            logger.error("API error for %s: %s", symbol, data,)
             return None
 
         except requests.exceptions.RequestException as exc:
-            print(
-                f"[REQUEST ERROR] {symbol} "
-                f"(attempt {attempt + 1}/{max_retries}): {exc}"
-            )
+            # print(
+            #     f"[REQUEST ERROR] {symbol} "
+            #     f"(attempt {attempt + 1}/{max_retries}): {exc}"
+            # )
+            logger.error("Request error for %s (attempt %s/%s): %s",
+                         symbol, attempt + 1, max_retries, exc,)
 
-    print(f"[FAILED] {symbol} after {max_retries} attempts")
+    logger.error("Failed to fetch data for %s after %s attempts",
+                 symbol, max_retries,)
     return None
 
 

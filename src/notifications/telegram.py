@@ -17,7 +17,7 @@ def send_telegram_message(message: str, bot_token: str, chat_id: str):
     response = requests.post(
         url,
         data=payload,
-        timeout=10,
+        timeout=30,
     )
 
     if response.status_code != 200:

@@ -8,6 +8,8 @@ from sqlalchemy import (
     String,
     Table,
     UniqueConstraint,
+    Date,
+    Boolean,
 )
 
 metadata = MetaData()
@@ -51,4 +53,55 @@ stock_alerts = Table(
     Column("relative_day_volume", Numeric),
     Column("created_at", DateTime),
     Column("alert_type", String(100)),
+)
+
+intraday_level_alerts = Table(
+    "intraday_level_alerts",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("symbol", String(10), nullable=False),
+    Column("alert_level", Numeric, nullable=False),
+    Column("change_from_open_pct", Numeric, nullable=False),
+    Column("current_price", Numeric),
+    Column("trading_day", Date, nullable=False),
+    Column("created_at", DateTime, nullable=False),
+
+    UniqueConstraint(
+        "symbol",
+        "alert_level",
+        "trading_day",
+        name="uq_intraday_level_alert"
+    ),
+)
+
+signal_alerts_v2 = Table(
+    "signal_alerts_v2",
+    metadata,
+    Column("id", Integer, primary_key=True),
+
+    Column("symbol", String(10), nullable=False),
+
+    Column("trough_time", DateTime),
+    Column("peak_price", Numeric),
+    Column("trough_price", Numeric),
+    Column("drawdown_pct", Numeric),
+
+    Column("day_open", Numeric),
+    Column("day_high", Numeric),
+    Column("current_price", Numeric),
+    Column("change_from_open_pct", Numeric),
+    Column("drawdown_from_day_high_pct", Numeric),
+
+    Column("rsi_5m_14", Numeric),
+    Column("rsi_daily_14", Numeric),
+
+    Column("volume_ratio", Numeric),
+
+    Column("signal", String(50), nullable=False),
+
+    Column("trading_day", Date, nullable=False),
+    Column("created_at", DateTime, nullable=False),
+    Column("company_name", String(100)),
+
+    Column("notified", Boolean, nullable=False, default=False),
 )
